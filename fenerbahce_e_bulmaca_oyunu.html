@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fenerbahçe Eş Bulmaca Oyunu</title>
+    <!-- Tailwind CSS ve FontAwesome kütüphaneleri -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: radial-gradient(circle, #155e2f 0%, #0a2f16 100%);
+        }
+
+        /* Futbol Sahası Çizgileri */
+        .pitch-lines {
+            background-image: 
+                linear-gradient(to bottom, rgba(255,255,255,0.05) 2px, transparent 2px),
+                linear-gradient(to right, rgba(255,255,255,0.05) 2px, transparent 2px);
+            background-size: 40px 40px;
+        }
+
+        /* Kart Döndürme Efektleri */
+        .card-perspective {
+            perspective: 1000px;
+        }
+
+        .card-inner {
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+
+        .card-perspective.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* Çim şeritleri efekti */
+        .pitch-stripes {
+            background: repeating-linear-gradient(
+                90deg,
+                #115e2e,
+                #115e2e 80px,
+                #166534 80px,
+                #166534 160px
+            );
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white flex flex-col items-center justify-between p-4 md:p-8 relative overflow-hidden">
+    
+    <!-- Saha Arkaplanı -->
+    <div class="absolute inset-0 pitch-stripes opacity-40 z-0"></div>
+    <div class="absolute inset-0 pitch-lines opacity-30 z-0"></div>
+
+    <!-- Üst Bar / Başlık -->
+    <header class="w-full max-w-4xl z-10 flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+        <div class="flex items-center gap-3">
+            <div class="bg-yellow-400 p-2.5 rounded-xl border-2 border-blue-900 shadow-lg animate-bounce">
+                <span class="text-3xl">🐦</span>
+            </div>
+            <div>
+                <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-yellow-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                    FENERBAHÇE <span class="text-blue-200">Arena</span>
+                </h1>
+                <p class="text-xs md:text-sm text-yellow-100 font-semibold tracking-wide drop-shadow">EŞ BULMACA ŞAMPİYONASI</p>
+            </div>
+        </div>
+
+        <!-- Ses Kontrol & Yardım -->
+        <div class="flex items-center gap-3">
+            <button id="sound-toggle" class="bg-blue-900/80 hover:bg-blue-800 border border-yellow-400 px-4 py-2 rounded-full flex items-center gap-2 transition duration-200 shadow-md">
+                <i id="sound-icon" class="fa-solid fa-volume-high text-yellow-400"></i>
+                <span class="text-xs font-bold">SES AÇIK</span>
+            </button>
+            <button onclick="resetGame()" class="bg-yellow-400 hover:bg-yellow-300 text-blue-950 font-bold px-5 py-2 rounded-full flex items-center gap-2 transition duration-200 shadow-lg transform hover:scale-105">
+                <i class="fa-solid fa-rotate-right"></i>
+                Yeniden Başla
+            </button>
+        </div>
+    </header>
+
+    <!-- Oyun Alanı -->
+    <main class="w-full max-w-4xl z-10 flex flex-col md:flex-row gap-6 items-center justify-center my-auto">
+        
+        <!-- Sol Panel: Skor ve İpuçları -->
+        <div class="w-full md:w-1/4 flex md:flex-col justify-around md:justify-start gap-4">
+            
+            <!-- Hamle Sayısı -->
+            <div class="bg-blue-950/80 border-2 border-yellow-400 rounded-2xl p-4 text-center shadow-2xl flex-1 md:flex-initial">
+                <p class="text-xs text-yellow-200 font-bold tracking-wider uppercase">Hamleler</p>
+                <p id="moves-count" class="text-4xl font-extrabold text-white mt-1">0</p>
+            </div>
+
+            <!-- Eşleşenler -->
+            <div class="bg-blue-950/80 border-2 border-yellow-400 rounded-2xl p-4 text-center shadow-2xl flex-1 md:flex-initial">
+                <p class="text-xs text-yellow-200 font-bold tracking-wider uppercase">Eşleşen Takımlar</p>
+                <p id="matches-count" class="text-4xl font-extrabold text-white mt-1">0 <span class="text-lg text-gray-400">/ 8</span></p>
+            </div>
+
+            <!-- En İyi Skor -->
+            <div class="bg-blue-950/80 border-2 border-yellow-400 rounded-2xl p-4 text-center shadow-2xl hidden md:block">
+                <p class="text-xs text-yellow-200 font-bold tracking-wider uppercase">En İyi Rekor</p>
+                <p id="best-score" class="text-3xl font-extrabold text-white mt-1">-</p>
+            </div>
+
+        </div>
+
+        <!-- Sağ Panel: Kart Grid'i -->
+        <div class="w-full md:w-3/4 max-w-lg md:max-w-none">
+            <div id="game-grid" class="grid grid-cols-4 gap-3 md:gap-4 aspect-square bg-black/30 p-4 rounded-3xl border border-white/10 backdrop-blur-sm shadow-inner">
+                <!-- Kartlar dinamik olarak buraya eklenecek -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Alt Bilgi / Footer -->
+    <footer class="w-full text-center text-xs text-yellow-200/60 font-medium tracking-wide z-10 mt-6 drop-shadow">
+        <p>💛 En Büyük Kanarya! Şampiyonluk Yolunda Galatasaray'a Geçit Yok! 💙</p>
+    </footer>
+
+    <!-- Oyun Bitti/Kazanıldı Modal Ekranı -->
+    <div id="victory-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gradient-to-b from-blue-950 to-blue-900 border-4 border-yellow-400 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl relative overflow-hidden animate-scaleIn">
+            
+            <!-- Konfeti Efektleri İçin Arkaplan Parıltısı -->
+            <div class="absolute -top-10 -left-10 w-40 h-40 bg-yellow-400/20 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-blue-400/20 rounded-full blur-2xl"></div>
+
+            <span class="text-7xl block mb-4 animate-bounce">🏆</span>
+            <h2 class="text-3xl font-extrabold text-yellow-400 tracking-tight">ŞAMPİYON FENERBAHÇE!</h2>
+            <p class="text-yellow-100 mt-2 text-sm">Harika bir hafıza! Sahayı dar ettin ve tüm rakipleri devirdin!</p>
+            
+            <div class="bg-black/30 rounded-2xl p-4 my-6 border border-white/5 flex justify-around">
+                <div>
+                    <p class="text-xs text-yellow-200 font-bold">Toplam Hamle</p>
+                    <p id="final-moves" class="text-2xl font-black text-white mt-1">0</p>
+                </div>
+                <div class="border-l border-white/10"></div>
+                <div>
+                    <p class="text-xs text-yellow-200 font-bold">Skor Durumu</p>
+                    <p class="text-2xl font-black text-green-400 mt-1">Kusursuz</p>
+                </div>
+            </div>
+
+            <button onclick="closeVictoryModal()" class="w-full bg-yellow-400 hover:bg-yellow-300 text-blue-950 font-extrabold py-3.5 px-6 rounded-2xl transition duration-200 shadow-lg transform hover:scale-[1.02] active:scale-[0.98] tracking-wider uppercase">
+                Yeniden Sahaya Çık!
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript Oyun Mantığı -->
+    <script>
+        // Ses Sentezleyici (Web Audio API) - Dış kütüphaneye ihtiyaç kalmadan oyun içi ses üretir.
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            
+            // Audio context askıdaysa kullanıcı etkileşimiyle aktifleştir
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'flip') {
+                // Kart dönme sesi
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'match') {
+                // Başarılı eşleşme sesi (Fenerbahçe marşı tınısı esintili iki başarılı nota)
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+                osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1); // C#5
+                osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2); // E5
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.35);
+            } else if (type === 'fail') {
+                // Eşleşmeme sesi (Hafif kalın bir uğultu/düşen frekans)
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.25);
+            } else if (type === 'win') {
+                // Şampiyonluk fanfare tınısı
+                const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+                notes.forEach((freq, index) => {
+                    const noteOsc = audioCtx.createOscillator();
+                    const noteGain = audioCtx.createGain();
+                    noteOsc.type = 'sine';
+                    noteOsc.frequency.setValueAtTime(freq, audioCtx.currentTime + index * 0.12);
+                    noteGain.connect(audioCtx.destination);
+                    noteOsc.connect(noteGain);
+                    noteGain.gain.setValueAtTime(0.15, audioCtx.currentTime + index * 0.12);
+                    noteGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + index * 0.12 + 0.4);
+                    noteOsc.start(audioCtx.currentTime + index * 0.12);
+                    noteOsc.stop(audioCtx.currentTime + index * 0.12 + 0.4);
+                });
+            }
+        }
+
+        // Ses Butonu Kontrolü
+        document.getElementById('sound-toggle').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            const label = document.querySelector('#sound-toggle span');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high text-yellow-400';
+                label.innerText = 'SES AÇIK';
+                playSound('flip');
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-gray-400';
+                label.innerText = 'SES KAPALI';
+            }
+        });
+
+        // Takım Verileri (KESİNLİKLE GALATASARAY YOK - FENERBAHÇE EN BAŞTA VE EN GÜÇLÜ!)
+        const teamsData = [
+            { id: 'fenerbahce', name: 'Fenerbahçe', flag: '💛💙', emoji: '🐦', color: 'from-blue-900 to-blue-800 border-yellow-400 text-yellow-400' },
+            { id: 'real_madrid', name: 'Real Madrid', flag: '⚪👑', emoji: '👑', color: 'from-slate-200 to-white border-blue-950 text-blue-950' },
+            { id: 'barcelona', name: 'Barcelona', flag: '🔵🔴', emoji: '⚽', color: 'from-blue-800 to-red-800 border-yellow-500 text-yellow-500' },
+            { id: 'liverpool', name: 'Liverpool', flag: '🔴🔴', emoji: '🦁', color: 'from-red-700 to-red-900 border-yellow-600 text-yellow-500' },
+            { id: 'man_city', name: 'Manchester City', flag: '🩵🩵', emoji: '🦈', color: 'from-sky-400 to-sky-600 border-white text-white' },
+            { id: 'milan', name: 'AC Milan', flag: '🔴⚫', emoji: '🔴', color: 'from-red-800 to-zinc-900 border-zinc-700 text-red-500' },
+            { id: 'fenerbahce_legend', name: 'Kadıköy Boğası', flag: '🐂', emoji: '🏟️', color: 'from-yellow-500 to-blue-900 border-yellow-400 text-blue-950' },
+            { id: 'champions_cup', name: 'Devler Kupası', flag: '🏆🌟', emoji: '🏆', color: 'from-amber-400 to-yellow-600 border-blue-950 text-blue-950' }
+        ];
+
+        let cards = [];
+        let flippedCards = [];
+        let matchedCount = 0;
+        let moves = 0;
+        let isLockGrid = false;
+        let bestScore = localStorage.getItem('fb_arena_best_score') || '-';
+
+        document.getElementById('best-score').innerText = bestScore;
+
+        // Kartları Karıştır ve Dağıt
+        function initGame() {
+            const grid = document.getElementById('game-grid');
+            grid.innerHTML = '';
+            
+            // Her takımdan 2 tane oluşturup karıştırıyoruz (Toplam 16 kart)
+            const deck = [...teamsData, ...teamsData];
+            cards = shuffle(deck);
+
+            cards.forEach((cardData, index) => {
+                const card = document.createElement('div');
+                card.classList.add('card-perspective', 'cursor-pointer', 'relative', 'w-full', 'h-full', 'aspect-square');
+                card.dataset.index = index;
+                card.dataset.teamId = cardData.id;
+
+                // Kartın İç Tasarımı (Front & Back)
+                card.innerHTML = `
+                    <div class="card-inner w-full h-full relative rounded-2xl shadow-xl">
+                        <!-- Kart Arkası (Sarı-Lacivert Fenerbahçe Teması) -->
+                        <div class="card-front bg-gradient-to-br from-blue-950 to-blue-900 border-2 border-yellow-400 rounded-2xl flex flex-col items-center justify-center p-1 transition-all duration-300 hover:border-white">
+                            <span class="text-2xl md:text-3xl text-yellow-400 font-extrabold tracking-widest drop-shadow">Fener</span>
+                            <div class="w-8 h-1 bg-yellow-400 my-1 rounded"></div>
+                            <span class="text-xxs text-blue-200 uppercase font-black tracking-widest">A r e n a</span>
+                        </div>
+                        <!-- Kart Önü (Futbol Takımı Bilgileri) -->
+                        <div class="card-back bg-gradient-to-br ${cardData.color} border-2 rounded-2xl flex flex-col items-center justify-center p-2 text-center">
+                            <span class="text-3xl md:text-4xl mb-1">${cardData.emoji}</span>
+                            <p class="text-xs font-black uppercase leading-tight">${cardData.name}</p>
+                            <span class="text-[10px] opacity-80 mt-1 font-bold">${cardData.flag}</span>
+                        </div>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => flipCard(card));
+                grid.appendChild(card);
+            });
+
+            // Değerleri sıfırla
+            moves = 0;
+            matchedCount = 0;
+            flippedCards = [];
+            isLockGrid = false;
+            document.getElementById('moves-count').innerText = moves;
+            document.getElementById('matches-count').innerHTML = '0 <span class="text-lg text-gray-400">/ 8</span>';
+        }
+
+        // Fisher-Yates Karıştırma Algoritması
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // Kart Çevirme Fonksiyonu
+        function flipCard(cardElement) {
+            if (isLockGrid) return;
+            if (cardElement.classList.contains('flipped')) return; // Zaten çevrilmişse bir şey yapma
+            if (flippedCards.length >= 2) return;
+
+            playSound('flip');
+            cardElement.classList.add('flipped');
+            flippedCards.push(cardElement);
+
+            if (flippedCards.length === 2) {
+                moves++;
+                document.getElementById('moves-count').innerText = moves;
+                checkMatch();
+            }
+        }
+
+        // Eşleşme Kontrolü
+        function checkMatch() {
+            isLockGrid = true;
+            const [card1, card2] = flippedCards;
+
+            if (card1.dataset.teamId === card2.dataset.teamId) {
+                // Eşleşme başarılı!
+                setTimeout(() => {
+                    playSound('match');
+                    
+                    // Kartlara başarı efekti ver
+                    card1.querySelector('.card-back').classList.add('border-green-400', 'scale-95');
+                    card2.querySelector('.card-back').classList.add('border-green-400', 'scale-95');
+                    
+                    matchedCount++;
+                    document.getElementById('matches-count').innerHTML = `${matchedCount} <span class="text-lg text-gray-400">/ 8</span>`;
+
+                    flippedCards = [];
+                    isLockGrid = false;
+
+                    // Oyun Bitti mi?
+                    if (matchedCount === 8) {
+                        handleVictory();
+                    }
+                }, 400);
+            } else {
+                // Eşleşme başarısız. Kartları geri çevir
+                setTimeout(() => {
+                    playSound('fail');
+                    card1.classList.remove('flipped');
+                    card2.classList.remove('flipped');
+                    flippedCards = [];
+                    isLockGrid = false;
+                }, 1200);
+            }
+        }
+
+        // Kazanma Ekranı
+        function handleVictory() {
+            setTimeout(() => {
+                playSound('win');
+                document.getElementById('final-moves').innerText = moves;
+                
+                // En iyi rekoru güncelle
+                if (bestScore === '-' || moves < bestScore) {
+                    bestScore = moves;
+                    localStorage.setItem('fb_arena_best_score', bestScore);
+                    document.getElementById('best-score').innerText = bestScore;
+                }
+
+                document.getElementById('victory-modal').classList.remove('hidden');
+            }, 600);
+        }
+
+        function closeVictoryModal() {
+            document.getElementById('victory-modal').classList.add('hidden');
+            initGame();
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Oyunu ilk açılışta başlat
+        window.onload = initGame;
+    </script>
+</body>
+</html>
